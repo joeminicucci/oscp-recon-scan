@@ -95,9 +95,9 @@ def write_to_file(ip_address, enum_type, data):
 
 
 
-def dirb(ip_address, port, url_start, wordlist="/usr/share/wordlist/dirb/big.txt, /usr/share/wordlist/dirb/vulns/cgis.txt"):
+def dirb(ip_address, port, url_start, wordlist="/usr/share/wordlists/dirb/big.txt,/usr/share/wordlists/dirb/vulns/cgis.txt"):
     print bcolors.HEADER + "INFO: Starting dirb scan for " + ip_address + bcolors.ENDC
-    DIRBSCAN = "dirb %s://%s:%s %s -o ../reports/%s/dirb-%s.txt -r" % (url_start, ip_address, port, ip_address, ip_address, wordlist)
+    DIRBSCAN = "dirb %s://%s:%s %s -o \"../reports/%s/dirb.%s-%s.txt\" -r" % (url_start, ip_address, port, wordlist, ip_address, url_start, ip_address)
     print bcolors.HEADER + DIRBSCAN + bcolors.ENDC
     results_dirb = subprocess.check_output(DIRBSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with dirb scan for " + ip_address + bcolors.ENDC
@@ -107,7 +107,7 @@ def dirb(ip_address, port, url_start, wordlist="/usr/share/wordlist/dirb/big.txt
 
 def nikto(ip_address, port, url_start):
     print bcolors.HEADER + "INFO: Starting nikto scan for " + ip_address + bcolors.ENDC
-    NIKTOSCAN = "nikto -h %s://%s -o ../reports/%s/nikto-%s-%s.txt" % (url_start, ip_address, ip_address, url_start, ip_address)
+    NIKTOSCAN = "nikto -h %s://%s:%s -o \"../reports/%s/nikto.%s-%s.txt\"" % (url_start, ip_address, port, ip_address, url_start, ip_address)
     print bcolors.HEADER + NIKTOSCAN + bcolors.ENDC
     results_nikto = subprocess.check_output(NIKTOSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with NIKTO-scan for " + ip_address + bcolors.ENDC
@@ -125,8 +125,8 @@ def httpEnum(ip_address, port):
     nikto_process = multiprocessing.Process(target=nikto, args=(ip_address,port,"http"))
     nikto_process.start()
 
-    CURLSCAN = "curl -I http://%s" % (ip_address)
-    print bcolors.HEADER + CURLSCAN + bcolors.END
+    CURLSCAN = "curl -I http://%s:%s" % (ip_address,port)
+    print bcolors.HEADER + CURLSCAN + bcolors.ENDC
     curl_results = subprocess.check_output(CURLSCAN, shell=True)
     write_to_file(ip_address, "curl", curl_results)
     HTTPSCAN = "nmap -sV -Pn -p %s --script=http-vhosts,http-userdir-enum,http-apache-negotiation,http-backup-finder,http-config-backup,http-default-accounts,http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,http-git,http-iis-webdav-vuln,http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN ../reports/%s/%s_http.nmap %s" % (port, ip_address, ip_address, ip_address)
@@ -183,7 +183,7 @@ def smtpEnum(ip_address, port):
 
 def smbNmap(ip_address, port):
     print "INFO: Detected SMB on " + ip_address + ":" + port
-    smbNmap = "nmap --script=smb-enum-shares,smb-ls,smb-enum-users,smb-mbenum,smb-os-discovery,smb-security-mode,smb-vuln-cve2009-3103,smb-vuln-ms06-025,smb-vuln-ms07-029,smb-vuln-ms08-067,smb-vuln-ms10-054,smb-vuln-ms10-061,smb-vuln-regsvc-dos %s -oN ../reports/%s/smb_%s.nmap" % (ip_address, ip_address, ip_address)
+    smbNmap = "nmap --script=smb-enum-shares,smb-ls,smb-enum-users,smb-mbenum,smb-os-discovery,smb-security-mode,smb-vuln-cve2009-3103,smb-vuln-ms06-025,smb-vuln-ms07-029,smb-vuln-ms08-067,smb-vuln-ms10-054,smb-vuln-ms10-061,smb-vuln-ms17-010,smb-vuln-regsvc-dos %s -oN ../reports/%s/smb_%s.nmap" % (ip_address, ip_address, ip_address)
     smbNmap_results = subprocess.check_output(smbNmap, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with SMB-Nmap-scan for " + ip_address + bcolors.ENDC
     print smbNmap_results
@@ -280,11 +280,13 @@ def nmapScan(ip_address):
    # go through the service dictionary to call additional targeted enumeration functions
     for serv in serv_dict:
         ports = serv_dict[serv]
-        if re.search(r"http[^s]", serv):
+        # if re.search(r"http[^s]", serv):
+        if "http" in serv and "https" not in serv and "ssl" not in serv:
             for port in ports:
                 port = port.split("/")[0]
                 multProc(httpEnum, ip_address, port)
-        elif re.search(r"https|ssl", serv):
+        # elif re.search(r"https|ssl", serv):
+        elif "https" in serv or "ssl" in serv:
             for port in ports:
                 port = port.split("/")[0]
                 multProc(httpsEnum, ip_address, port)
