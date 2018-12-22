@@ -11,7 +11,11 @@ import socket
 import re
 
 # Todo:
+#Replace Curl with HTTP responses which check for body programmatically
+#Intense nmap discovery w/vulscan nse
+#wordlist auto discovery
 # Add mysql nmap-script
+#brute forcers / brutespray
 # Change replace to sed:
 # sed 's|literal_pattern|replacement_string|g'
 
