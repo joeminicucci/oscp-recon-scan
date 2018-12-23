@@ -33,9 +33,9 @@ class bcolors:
 
 
 # Creates a function for multiprocessing. Several things at once.
-def multProc(targetin, scanip, port):
+def multProc(targetin, scanip, port, serviceBanner):
     jobs = []
-    p = multiprocessing.Process(target=targetin, args=(scanip,port))
+    p = multiprocessing.Process(target=targetin, args=(scanip,port, serviceBanner))
     jobs.append(p)
     p.start()
     return
@@ -99,37 +99,50 @@ def write_to_file(ip_address, enum_type, data):
 
 
 
-def dirb(ip_address, port, url_start, wordlist="/usr/share/wordlists/dirb/big.txt,/usr/share/wordlists/dirb/vulns/cgis.txt"):
-    print bcolors.HEADER + "INFO: Starting dirb scan for " + ip_address + bcolors.ENDC
+# def dirb(ip_address, port, url_start, wordlist="/usr/share/wordlists/dirb/big.txt,/usr/share/wordlists/dirb/vulns/cgis.txt"):
+#     print bcolors.HEADER + "INFO: Starting dirb scan for " + ip_address + bcolors.ENDC
+#     DIRBSCAN = "dirb %s://%s:%s %s -o \"../reports/%s/dirb.%s-%s.txt\" -r" % (url_start, ip_address, port, wordlist, ip_address, url_start, ip_address)
+#     print bcolors.HEADER + DIRBSCAN + bcolors.ENDC
+#     results_dirb = subprocess.check_output(DIRBSCAN, shell=True)
+#     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with dirb scan for " + ip_address + bcolors.ENDC
+#     print results_dirb
+#     write_to_file(ip_address, "dirb", results_dirb)
+#     return
+
+def dirb(ip_address, port, url_start, wordlist):
+    #want to run dirb manually in separate terminals
+    print bcolors.OKBLUE + "{DIRB}"+ bcolors.ENDC
     DIRBSCAN = "dirb %s://%s:%s %s -o \"../reports/%s/dirb.%s-%s.txt\" -r" % (url_start, ip_address, port, wordlist, ip_address, url_start, ip_address)
-    print bcolors.HEADER + DIRBSCAN + bcolors.ENDC
-    results_dirb = subprocess.check_output(DIRBSCAN, shell=True)
-    print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with dirb scan for " + ip_address + bcolors.ENDC
-    print results_dirb
-    write_to_file(ip_address, "dirb", results_dirb)
+    print bcolors.OKBLUE + DIRBSCAN + bcolors.ENDC
     return
+
+# def nikto(ip_address, port, url_start):
+#     print bcolors.HEADER + "INFO: Starting nikto scan for " + ip_address + bcolors.ENDC
+#     NIKTOSCAN = "nikto -h %s://%s:%s -o \"../reports/%s/nikto.%s-%s.txt\"" % (url_start, ip_address, port, ip_address, url_start, ip_address)
+#     print bcolors.HEADER + NIKTOSCAN + bcolors.ENDC
+#     results_nikto = subprocess.check_output(NIKTOSCAN, shell=True)
+#     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with NIKTO-scan for " + ip_address + bcolors.ENDC
+#     print results_nikto
+#     write_to_file(ip_address, "nikto", results_nikto)
+#     return
 
 def nikto(ip_address, port, url_start):
-    print bcolors.HEADER + "INFO: Starting nikto scan for " + ip_address + bcolors.ENDC
+    print bcolors.OKBLUE + "{NIKTO}"+ bcolors.ENDC
     NIKTOSCAN = "nikto -h %s://%s:%s -o \"../reports/%s/nikto.%s-%s.txt\"" % (url_start, ip_address, port, ip_address, url_start, ip_address)
-    print bcolors.HEADER + NIKTOSCAN + bcolors.ENDC
-    results_nikto = subprocess.check_output(NIKTOSCAN, shell=True)
-    print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with NIKTO-scan for " + ip_address + bcolors.ENDC
-    print results_nikto
-    write_to_file(ip_address, "nikto", results_nikto)
+    print bcolors.OKBLUE + NIKTOSCAN + bcolors.ENDC
     return
 
-
-def httpEnum(ip_address, port):
+def httpEnum(ip_address, port, serviceBanner):
     print bcolors.HEADER + "INFO: Detected http on " + ip_address + ":" + port + bcolors.ENDC
     print bcolors.HEADER + "INFO: Performing nmap web script scan for " + ip_address + ":" + port + bcolors.ENDC
 
-    dirb_process = multiprocessing.Process(target=dirb, args=(ip_address,port,"http"))
+
+    dirb_process = multiprocessing.Process(target=dirb, args=(ip_address,port,"http", findWordlists(serviceBanner)))
     dirb_process.start()
     nikto_process = multiprocessing.Process(target=nikto, args=(ip_address,port,"http"))
     nikto_process.start()
 
-    CURLSCAN = "curl -I http://%s:%s" % (ip_address,port)
+    CURLSCAN = "curl -I http://%s:%s -m 60" % (ip_address,port)
     print bcolors.HEADER + CURLSCAN + bcolors.ENDC
     curl_results = subprocess.check_output(CURLSCAN, shell=True)
     write_to_file(ip_address, "curl", curl_results)
@@ -142,10 +155,11 @@ def httpEnum(ip_address, port):
 
     return
 
-def httpsEnum(ip_address, port):
+def httpsEnum(ip_address, port, serviceBanner):
     print bcolors.HEADER + "INFO: Detected https on " + ip_address + ":" + port + bcolors.ENDC
     print bcolors.HEADER + "INFO: Performing nmap web script scan for " + ip_address + ":" + port + bcolors.ENDC
 
+    findWordlists(serviceBanner)
     dirb_process = multiprocessing.Process(target=dirb, args=(ip_address,port,"https"))
     dirb_process.start()
     nikto_process = multiprocessing.Process(target=nikto, args=(ip_address,port,"https"))
@@ -163,7 +177,23 @@ def httpsEnum(ip_address, port):
     print https_results
     return
 
-def mssqlEnum(ip_address, port):
+targettedWordlists = {
+    "iis": "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/IIS.fuzz.txt",
+    "apache,tomcat,coyote":
+        "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/apache.txt,"\
+        "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/ApacheTomcat.fuzz.txt",
+    "php": "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/PHP.fuzz.txt"
+}
+def findWordlists(serviceBanner):
+    wordlists=""
+    for wordlistType in targettedWordlists:
+        if any(serv in serviceBanner.lower() for serv in wordlistType.split(",")):
+            wordlists+=targettedWordlists[wordlistType]+","
+    wordlists+= "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/common.txt,"\
+                "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/CGIs.txt"
+    return wordlists
+
+def mssqlEnum(ip_address, port, serviceBanner):
     print bcolors.HEADER + "INFO: Detected MS-SQL on " + ip_address + ":" + port + bcolors.ENDC
     print bcolors.HEADER + "INFO: Performing nmap mssql script scan for " + ip_address + ":" + port + bcolors.ENDC
     MSSQLSCAN = "nmap -sV -Pn -p %s --script=ms-sql-info,ms-sql-config,ms-sql-dump-hashes,mysql-empty-password,mysql-brute,mysql-users,mysql-variables,mysql-vuln-cve2012-2122 --script-args=mssql.instance-port=1433,mssql.username=sa,mssql.password=sa -oN ../reports/%s/mssql_%s.nmap %s" % (port, ip_address, ip_address)
@@ -174,7 +204,7 @@ def mssqlEnum(ip_address, port):
     return
 
 
-def smtpEnum(ip_address, port):
+def smtpEnum(ip_address, port, serviceBanner):
     print bcolors.HEADER + "INFO: Detected smtp on " + ip_address + ":" + port  + bcolors.ENDC
     connect_to_port(ip_address, port, "smtp")
     SMTPSCAN = "nmap -sV -Pn -p %s --script=smtp-commands,smtp-enum-users,smtp-vuln-cve2010-4344,smtp-vuln-cve2011-1720,smtp-vuln-cve2011-1764 %s -oN ../reports/%s/smtp_%s.nmap" % (port, ip_address, ip_address, ip_address)
@@ -185,7 +215,7 @@ def smtpEnum(ip_address, port):
     # write_to_file(ip_address, "smtp", smtp_results)
     return
 
-def smbNmap(ip_address, port):
+def smbNmap(ip_address, port, serviceBanner):
     print "INFO: Detected SMB on " + ip_address + ":" + port
     smbNmap = "nmap --script=smb-enum-shares,smb-ls,smb-enum-users,smb-mbenum,smb-os-discovery,smb-security-mode,smb-vuln-cve2009-3103,smb-vuln-ms06-025,smb-vuln-ms07-029,smb-vuln-ms08-067,smb-vuln-ms10-054,smb-vuln-ms10-061,smb-vuln-ms17-010,smb-vuln-regsvc-dos %s -oN ../reports/%s/smb_%s.nmap" % (ip_address, ip_address, ip_address)
     smbNmap_results = subprocess.check_output(smbNmap, shell=True)
@@ -193,7 +223,7 @@ def smbNmap(ip_address, port):
     print smbNmap_results
     return
 
-def smbEnum(ip_address, port):
+def smbEnum(ip_address, port, serviceBanner):
     print "INFO: Detected SMB on " + ip_address + ":" + port
     enum4linux = "enum4linux -a %s > ../reports/%s/enum4linux_%s 2>/dev/null" % (ip_address, ip_address, ip_address)
     enum4linux_results = subprocess.check_output(enum4linux, shell=True)
@@ -201,7 +231,7 @@ def smbEnum(ip_address, port):
     print enum4linux_results
     return
 
-def ftpEnum(ip_address, port):
+def ftpEnum(ip_address, port, serviceBanner):
     print bcolors.HEADER + "INFO: Detected ftp on " + ip_address + ":" + port  + bcolors.ENDC
     connect_to_port(ip_address, port, "ftp")
     FTPSCAN = "nmap -sV -Pn -p %s --script=ftp-anon,ftp-bounce,ftp-libopie,ftp-proftpd-backdoor,ftp-vsftpd-backdoor,ftp-vuln-cve2010-4221 -oN '../reports/%s/ftp_%s.nmap' %s" % (port, ip_address, ip_address, ip_address)
@@ -222,7 +252,7 @@ def udpScan(ip_address):
     unicornscan_results = subprocess.check_output(UNICORNSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: CHECK FILE - Finished with UNICORNSCAN for " + ip_address + bcolors.ENDC
 
-def sshScan(ip_address, port):
+def sshScan(ip_address, port, serviceBanner):
     print bcolors.HEADER + "INFO: Detected SSH on " + ip_address + ":" + port  + bcolors.ENDC
     connect_to_port(ip_address, port, "ssh")
     SSHSCAN = "nmap -sV -Pn -p %s --script=ssh-auth-methods,ssh-hostkey,ssh-run,sshv1 -oN '../reports/%s/ssh_%s.nmap' %s" % (port, ip_address, ip_address, ip_address)
@@ -232,7 +262,7 @@ def sshScan(ip_address, port):
     print results_ssh
     return
 
-def pop3Scan(ip_address, port):
+def pop3Scan(ip_address, port, serviceBanner):
     print bcolors.HEADER + "INFO: Detected POP3 on " + ip_address + ":" + port  + bcolors.ENDC
     connect_to_port(ip_address, port, "pop3")
     POP3SCAN = "nmap -sV -Pn -p %s --script=pop3-brute,pop3-capabilities,pop3-ntlm-info -oN '../reports/%s/pop3_%s.nmap' %s" % (port, ip_address, ip_address, ip_address)
@@ -288,37 +318,37 @@ def nmapScan(ip_address):
         if "http" in serv and "https" not in serv and "ssl" not in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(httpEnum, ip_address, port)
+                multProc(httpEnum, ip_address, port, serv)
         # elif re.search(r"https|ssl", serv):
         elif "https" in serv or "ssl" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(httpsEnum, ip_address, port)
+                multProc(httpsEnum, ip_address, port, serv)
         elif "smtp" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(smtpEnum, ip_address, port)
+                multProc(smtpEnum, ip_address, port, serv)
         elif "ftp" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(ftpEnum, ip_address, port)
+                multProc(ftpEnum, ip_address, port, serv)
         elif ("microsoft-ds" in serv) or ("netbios-ssn" == serv):
             for port in ports:
                 port = port.split("/")[0]
-                multProc(smbEnum, ip_address, port)
-                multProc(smbNmap, ip_address, port)
+                multProc(smbEnum, ip_address, port, serv)
+                multProc(smbNmap, ip_address, port, serv)
         elif "ms-sql" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(mssqlEnum, ip_address, port)
+                multProc(mssqlEnum, ip_address, port, serv)
         elif "ssh" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(sshScan, ip_address, port)
+                multProc(sshScan, ip_address, port, serv)
         elif "snmp" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(snmpEnum, ip_address, port)
+                multProc(snmpEnum, ip_address, port, serv)
 
     return
 
