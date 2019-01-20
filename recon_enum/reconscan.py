@@ -9,6 +9,7 @@ import atexit
 import sys
 import socket
 import re
+import argparse
 
 # Todo:
 #Replace Curl with HTTP responses which check for body programmatically
@@ -33,9 +34,9 @@ class bcolors:
 
 
 # Creates a function for multiprocessing. Several things at once.
-def multProc(targetin, scanip, port, serviceBanner):
+def multProc(targetin, ip, port, serviceBanner):
     jobs = []
-    p = multiprocessing.Process(target=targetin, args=(scanip,port, serviceBanner))
+    p = multiprocessing.Process(target=targetin, args=(ip,port, serviceBanner))
     jobs.append(p)
     p.start()
     return
@@ -273,10 +274,9 @@ def pop3Scan(ip_address, port, serviceBanner):
     return
 
 
-def nmapScan(ip_address):
+def nmapScan(ip_address, intenseMode):
     ip_address = ip_address.strip()
     print bcolors.OKGREEN + "INFO: Running general TCP/UDP nmap scans for " + ip_address + bcolors.ENDC
-
 
     TCPSCAN = "nmap -sV -O %s -oN '../reports/%s/%s.nmap'"  % (ip_address, ip_address, ip_address)
     print bcolors.HEADER + TCPSCAN + bcolors.ENDC
@@ -284,12 +284,12 @@ def nmapScan(ip_address):
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with BASIC Nmap-scan for " + ip_address + bcolors.ENDC
     print results
 
-    p = multiprocessing.Process(target=udpScan, args=(scanip,))
+    p = multiprocessing.Process(target=udpScan, args=(ip,))
     p.start()
 
     write_to_file(ip_address, "portscan", results)
     lines = results.split("\n")
-    serv_dict = {}
+    serviceDict = {}
     for line in lines:
         ports = []
         line = line.strip()
@@ -302,56 +302,61 @@ def nmapScan(ip_address):
 
             port = line.split(" ")[0] # grab the port/proto
             # print port
-            if service in serv_dict:
-                ports = serv_dict[service] # if the service is already in the dict, grab the port list
+            if service in serviceDict:
+                ports = serviceDict[service] # if the service is already in the dict, grab the port list
 
             ports.append(port)
             # print ports
-            serv_dict[service] = ports # add service to the dictionary along with the associated port(2)
+            serviceDict[service] = ports # add service to the dictionary along with the associated port(2)
 
+    return serviceDict
 
-
-   # go through the service dictionary to call additional targeted enumeration functions
-    for serv in serv_dict:
-        ports = serv_dict[serv]
+def serviceEnumeration(ip, serviceDict, bruteForceMode):
+       # go through the service dictionary to call additional targeted enumeration functions
+    for serv in serviceDict:
+        ports = serviceDict[serv]
         # if re.search(r"http[^s]", serv):
         if "http" in serv and "https" not in serv and "ssl" not in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(httpEnum, ip_address, port, serv)
+                multProc(httpEnum, ip, port, serv)
         # elif re.search(r"https|ssl", serv):
         elif "https" in serv or "ssl" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(httpsEnum, ip_address, port, serv)
+                multProc(httpsEnum, ip, port, serv)
         elif "smtp" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(smtpEnum, ip_address, port, serv)
+                multProc(smtpEnum, ip, port, serv)
         elif "ftp" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(ftpEnum, ip_address, port, serv)
+                multProc(ftpEnum, ip, port, serv)
         elif ("microsoft-ds" in serv) or ("netbios-ssn" == serv):
             for port in ports:
                 port = port.split("/")[0]
-                multProc(smbEnum, ip_address, port, serv)
-                multProc(smbNmap, ip_address, port, serv)
+                multProc(smbEnum, ip, port, serv)
+                multProc(smbNmap, ip, port, serv)
         elif "ms-sql" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(mssqlEnum, ip_address, port, serv)
+                multProc(mssqlEnum, ip, port, serv)
         elif "ssh" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(sshScan, ip_address, port, serv)
+                multProc(sshScan, ip, port, serv)
         elif "snmp" in serv:
             for port in ports:
                 port = port.split("/")[0]
-                multProc(snmpEnum, ip_address, port, serv)
+                multProc(snmpEnum, ip, port, serv)
 
     return
 
+def enumerateHost(ip, intense, brute):
+    serviceDict = nmapScan(ip, intense)
+    serviceEnumeration(ip, serviceDict, brute)
+    return
 
 print bcolors.HEADER
 print "------------------------------------------------------------"
@@ -361,41 +366,125 @@ print "!!!!        dirb, nikto, ftp, ssh, mssql, pop3, tcp    !!!!!"
 print "!!!!                    udp, smtp, smb                 !!!!!"
 print "------------------------------------------------------------"
 
-
-
-if len(sys.argv) < 2:
-    print ""
-    print "Usage: python reconscan.py <ip> <ip> <ip>"
-    print "Example: python reconscan.py 192.168.1.101 192.168.1.102"
-    print ""
-    print "############################################################"
-    pass
-    sys.exit()
+fiddyCal="""
+MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMWMMMMMMMMMMMMMMMMMMMMWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMMMMMMWWMMMMMWWWWWMMWXKXWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMMWWW0k0kooooolcc::cc;;o0WMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMWMMNKk,.'............  ,0MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMMNl...............;ll;cKMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMWWMMMM
+MMMMMMMMMMMMMMMMMMWkol;';'.......,kNWMWNNNNWMWMMMMMWNXNWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+Kxxdodddddddddddddddool:c;.'.'...,looooo:;:clclllll:,',cdOOOOOOOOOOOOkkkkkkkkkkkkkxdoooodK
+x...................... ................................,:ccccccccccccccccccclllllc:;;:;l0
+0,.cxxxxxxc;oxxxxkxl'...............':okkdclxOkkOOOOOOOOXWWMMMMWWMMMMMMMMMMMMMMMMMMWWWWWWM
+O'.lOkxddoo0MMWMMWMNl..,:c,.........,codoolkNWWWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+Kl;:oodxOOXMMMMMMNOc..:xkOx;.......'lO0000KNMMWWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MWNWMMMMMMMMMMMMMO,.'oXMWMWo...''',c0WMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMMNKO0XMMMMW0dxO0KXNWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMWWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMMWMMMMMMMMMMMMMMWWMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+"""
+print(fiddyCal)
 
 print bcolors.ENDC
 
+headshot="""
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@#;;;;#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@;  ``    ` `'@#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@:          ` `  ,@@@@@@@@@@@@@@@@@@@@@@@@'@@@@@@
+@@@@@@@ `    `            '@@@@@@@@@@@@@@@@@@@@@'`.@#`@@
+@@@@@#   ``:`@  ..`     `  .@@@@@@@@@@@@@@@@@@@@  ##``,@
+@@@@@  ` `;@@@@@@@         `.@@@@@@@@@@@@@@@@@@@' #  `@@
+@@@@ ` ,,.#@@@@@@@`       ````::::;;;;;;;;;'+@@@@@` `#@@
+@@@,  `;@@@@@@@@@@@.``                        .@@@@,@@@@
+@@@     @@@@@@@@@@@@@`                       ` ` +@# ```
+@@'    ;@@@@@@@@@@@@@`                           +@#`   
+@@`  `@@@@@@@@@@@@@@ `                         '@@@@###'
+@@   `` .@@@@@@@@@@@``            ,,.........;@@@@@ +#@@
+@@      `@@@@@@@@@@@@`            @@@@@@@@@@@@@@@@#``'@#
+@#      ` @@@@@@@@'`             `+@@@@@@@@@@@@@'`.#``'@
+@#`     ``@@@@@@@@+               `@@@@@@@@@@@@@@  @+``#
+@#        #@`@@@                   @@@@@@@@@@@@@@' #@+`@
+@#        ` ` @`  `   `            @@@@@@@@@@@@@@@@@@@@@
+@@`           `  `   #@@# ``    ` `@@@@@@@@@@@@@@@@@@@@@
+@@                `;@@@@@@.`   ` . @@@@@@@@@@@@@@@@@@@@@
+@@                 @@@@@@@@ `` .@@,@@@@@@@@@@@@@@@@@@@@@
+@@.                @@@@@@@+`   @@#@@@@@@@@@@@@@@@@@@@@@@
+@@'`                @@@@@#   ` @@:@@@@@@@@@@@@@@@@@@@@@@
+@@@                `  .. `     .@:@@@@@@@@@@@@@@@@@@@@@@
+@@@                 ``  `      `` @@@@@@@@@@@@@@@@@@@@@@
+@@@`                             `#@@@@@@@@@@@@@@@@@@@@@
+@@@;                             `;@@@@@@@@@@@@@@@@@@@@@
+@@@@                              .@@@@@@@@@@@@@@@@@@@@@
+@@@@                              ,@@@@@@@@@@@@@@@@@@@@@
+@@@@                              '@@@@@@@@@@@@@@@@@@@@@
+@@@@`                            `@@@@@@@@@@@@@@@@@@@@@@
+@@@@.                            `@@@@@@@@@@@@@@@@@@@@@@
+@@@@`                  `` :'';:  @@@@@@@@@@@@@@@@@@@@@@@
+@@@@                    +@@@@@@@`@@@@@@@@@@@@@@@@@@@@@@@
+@@@@                   ,@@@@@@@@;@@@@@@@@@@@@@@@@@@@@@@@
+@@@#`                   ,@@@@@@+@@@@@@@@@@@@@@@@@@@@@@@@
+@@@;                      '@@@+ @@@@@@@@@@@@@@@@@@@@@@@@
+@@@`                      `` ``.@@@@@@@@@@@@@@@@@@@@@@@@
+@@@                           `#@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ `                        ` @@@@@@@@@@@@@@@@@@@@@@@@@
+@@@+`                         #@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@+`                    `` .@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@+`                   ``,@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@#+                    ,#@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@# `                 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@                  `@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@`                 @@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@:`               @@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@  `      `  ` #@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@+ ``     ` ,@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@:`   `;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+"""
+
+def buildReportDirectory(ip):
+    print bcolors.HEADER + "INFO: No folder was found for " + ip + ". Setting up folder." + bcolors.ENDC
+    subprocess.check_output("mkdir ../reports/" + ip, shell=True)
+    subprocess.check_output("mkdir ../reports/" + ip + "/exploits", shell=True)
+    subprocess.check_output("mkdir ../reports/" + ip + "/privesc", shell=True)
+    print bcolors.OKGREEN + "INFO: Folder created here: " + "../reports/" + ip + bcolors.ENDC
+    subprocess.check_output("cp ../templates/windows-template.md ../reports/" + ip + "/mapping-windows.md", shell=True)
+    subprocess.check_output("cp ../templates/linux-template.md ../reports/" + ip + "/mapping-linux.md", shell=True)
+    print bcolors.OKGREEN + "INFO: Added pentesting templates: " + "../reports/" + ip + bcolors.ENDC
+    subprocess.check_output("sed -i -e 's/INSERTIPADDRESS/" + ip + "/g' ../reports/" + ip + "/mapping-windows.md",
+                            shell=True)
+    subprocess.check_output("sed -i -e 's/INSERTIPADDRESS/" + ip + "/g' ../reports/" + ip + "/mapping-linux.md",
+                            shell=True)
+
+
 if __name__=='__main__':
 
-    # Setting ip targets
-    targets = sys.argv
-    targets.pop(0)
+    parser = argparse.ArgumentParser(description='Intrusive reconnaissance engagement tool.')
+    parser.add_argument('--target', '-t', nargs="+", type=str, required=True,
+                        help='The IP(s) you want to assault, space delimited', metavar="IP Target(s)", dest='targets')
+    parser.add_argument('--intense', '-i', action='store_true',
+                        help='Run nmap intensively against every port.', dest='intense')
+    parser.add_argument('--brute', '-b', action='store_true',
+                        help='Run brute force mode, all services found which are brute-forceable will be run against brutespray', dest='brute')
+    options = parser.parse_args()
+    intense = options.intense
+    brute = options.brute
 
-    dirs = os.listdir("../reports/")
-    for scanip in targets:
-        scanip = scanip.rstrip()
-        if not scanip in dirs:
-            print bcolors.HEADER + "INFO: No folder was found for " + scanip + ". Setting up folder." + bcolors.ENDC
-            subprocess.check_output("mkdir ../reports/" + scanip, shell=True)
-            subprocess.check_output("mkdir ../reports/" + scanip + "/exploits", shell=True)
-            subprocess.check_output("mkdir ../reports/" + scanip + "/privesc", shell=True)
-            print bcolors.OKGREEN + "INFO: Folder created here: " + "../reports/" + scanip + bcolors.ENDC
-            subprocess.check_output("cp ../templates/windows-template.md ../reports/" + scanip + "/mapping-windows.md", shell=True)
-            subprocess.check_output("cp ../templates/linux-template.md ../reports/" + scanip + "/mapping-linux.md", shell=True)
-            print bcolors.OKGREEN + "INFO: Added pentesting templates: " + "../reports/" + scanip + bcolors.ENDC
-            subprocess.check_output("sed -i -e 's/INSERTIPADDRESS/" + scanip + "/g' ../reports/" + scanip + "/mapping-windows.md", shell=True)
-            subprocess.check_output("sed -i -e 's/INSERTIPADDRESS/" + scanip + "/g' ../reports/" + scanip + "/mapping-linux.md", shell=True)
+    reportDirectory = os.listdir("../reports/")
+    for ip in options.targets:
+        if not ip in reportDirectory:
+            buildReportDirectory(ip)
 
-
-
-        p = multiprocessing.Process(target=nmapScan, args=(scanip,))
+        p = multiprocessing.Process(target=enumerateHost, args=(ip,intense,brute))
         p.start()
+
+    # print bcolors.HEADER
+    # print (headshot)
+    # print bcolors.ENDC
