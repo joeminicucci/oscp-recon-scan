@@ -4,4 +4,6 @@ folder=$(find /home /usr /var /tmp /opt /mnt /root -type d -name recon_enum -pri
 echo -e '#!/bin/bash\n' > /usr/bin/reconscan
 echo -e "cd  $folder && python reconscan.py \"\$@\" \n" >> /usr/bin/reconscan
 chmod +x /usr/bin/reconscan
-
+apt-get install brutespray
+pip install argparse
+apt-get install xdotool
