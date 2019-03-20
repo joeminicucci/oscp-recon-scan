@@ -13,7 +13,6 @@ import argparse
 import time
 
 # Todo:
-#catch errors in enumerations such as dirb (https)
 #searchsploit w/xml
 # enhanced unicorn scan
 #extra nmap scans
@@ -27,6 +26,7 @@ import time
 
 start = time.time()
 reconenumpath=None
+termMode=False
 
 class bcolors:
     HEADER = '\033[95m'
@@ -45,6 +45,14 @@ def multProc(targetin, ip, port, serviceBanner, termMode):
     p = multiprocessing.Process(target=targetin, args=(ip,port, serviceBanner, termMode))
     jobs.append(p)
     p.start()
+    return
+
+# Creates a function for multiprocessing. Several things at once.
+def multProcTest(targetin, args):
+    que = Queue()
+    p = multiprocessing.Process(group=que, target=targetin, args=args)
+    try: p.start()
+    except: pass
     return
 
 def connect_to_port(ip, port, service):
@@ -101,13 +109,38 @@ def write_to_file(ip, enum_type, data):
         if enum_type == "curl":
             subprocess.check_output("replace INSERTCURLHEADER \"" + data + "\"  -- " + path, shell=True)
     return
+def launchSubProcAndReport(name,level,command):
+    #introduction to stdout
+    print bcolors.HEADER + command + bcolors.ENDC
+
+    #launch
+    cli_output=""
+    try:
+        cli_output = subprocess.check_output(command, shell=True)
+        write_to_file(ip, name, cli_output)
+    except:
+        pass
+
+    #report
+    cli_results = "INFO: "
+    if level is "INFO" : cli_results+="RESULT BELOW "
+    else: "CHECK FILE "
+    print bcolors.OKGREEN + cli_results + "- Finished with" + name + " SCAN for " + ip + bcolors.ENDC
+    print cli_output
+    return
+
 
 def dirb(ip, port, url_start, wordlist):
     print bcolors.OKBLUE + "{DIRB}"+ bcolors.ENDC
     DIRBSCAN = "dirb %s://%s:%s %s -o \"%s/reports/%s/dirb.%s.%s.txt\" -r" % (url_start, ip, port, wordlist, reconenumpath, ip, url_start, ip)
     print bcolors.OKBLUE + DIRBSCAN + bcolors.ENDC
     print bcolors.OKBLUE + "{DIRB}"+ bcolors.ENDC
-    return DIRBSCAN
+
+    if termMode:
+        openGnomeTerm(ip + " _dirb_"+url_start, DIRBSCAN,True)
+    else:
+        launchSubProcAndReport("dirb."+url_start, "FILE", DIRBSCAN, )
+    return
 
 def nikto(ip, port, url_start):
     print bcolors.OKBLUE + "{NIKTO}"+ bcolors.ENDC
@@ -116,52 +149,43 @@ def nikto(ip, port, url_start):
         NIKTOSCAN+=" -ssl"
     print bcolors.OKBLUE + NIKTOSCAN + bcolors.ENDC
     print bcolors.OKBLUE + "{NIKTO}"+ bcolors.ENDC
-    return NIKTOSCAN
+
+    if termMode:
+        openGnomeTerm(ip + " _nikto_" + url_start, NIKTOSCAN, True)
+    else:
+        launchSubProcAndReport("nikto."+url_start, "FILE", DIRBSCAN, )
+
+    return
 
 def curl(ip, port, url_start):
     print bcolors.OKBLUE + "{CURL}"+ bcolors.ENDC
     CURLSCAN = "curl -I -k %s://%s:%s -m 60 -o \"%s/reports/%s/curl.%s.%s.txt\"" % (url_start,ip,port,reconenumpath, ip, url_start, ip)
     print bcolors.OKBLUE + CURLSCAN + bcolors.ENDC
     print bcolors.OKBLUE + "{CURL}"+ bcolors.ENDC
-    return CURLSCAN
+
+    launchSubProcAndReport("CURL" + url_start, "FILE", CURLSCAN)
+    return
+
+def httpScan(ip, port, isSsl):
+    prefix = "https" if isSsl else "http"
+    HTTPSCAN = "nmap -sV -Pn -p %s --script=http-vhosts,http-userdir-enum,http-apache-negotiation,http-backup-finder,http-config-backup,http-default-accounts," % port+\
+               "http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,http-git,http-iis-webdav-vuln,"+\
+               "http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN %s/reports/%s/http.%s.nmap %s" % (reconenumpath, ip, ip, ip)
+
+    return launchSubProcAndReport(prefix+" SCAN", "INFO", HTTPSCAN)
+
+def sslScan(ip, port):
+    SSLSCAN = "sslscan %s:%s >> %s/reports/%s/ssl_scan_%s" % (ip, port, reconenumpath, ip, ip)
+    return launchSubProcAndReport("SSL SCAN", "FILE", SSLSCAN)
 
 def httpEnum(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected http on " + ip + ":" + port + bcolors.ENDC
     print bcolors.HEADER + "INFO: Performing nmap web script scan for " + ip + ":" + port + bcolors.ENDC
 
-    if termMode:
-        dirbproc=multiprocessing.Process(target=openGnomeTerm, args=(ip + " dirb", dirb(ip, port, "http", findWordlists(serviceBanner)), True))
-        dirbproc.start()
-
-        nikto_process=multiprocessing.Process(target=openGnomeTerm, args=(ip + " nikto", nikto(ip,port,"http"), True))
-        nikto_process.start()
-
-        curl_process=multiprocessing.Process(target=openGnomeTerm, args=(ip + " curl", curl(ip,port,"http"), True))
-        curl_process.start()
-
-    else:
-        results_dirb = subprocess.check_output(dirb(ip, port, "http", findWordlists(serviceBanner)), shell=True)
-        print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with dirb scan for " + ip + bcolors.ENDC
-        print results_dirb
-        write_to_file(ip, "dirb", results_dirb)
-
-        results_nikto = subprocess.check_output(nikto(ip,port,"http"), shell=True)
-        print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with NIKTO-scan for " + ip + bcolors.ENDC
-        print results_nikto
-        write_to_file(ip, "nikto", results_nikto)
-
-        results_curl = subprocess.check_output(curl(ip,port,"http"), shell=True)
-        print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with CURL scan for " + ip + bcolors.ENDC
-        print results_curl
-        write_to_file(ip, "curl", results_curl)
-
-    HTTPSCAN = "nmap -sV -Pn -p %s --script=http-vhosts,http-userdir-enum,http-apache-negotiation,http-backup-finder,http-config-backup,http-default-accounts," % port+\
-               "http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,http-git,http-iis-webdav-vuln,"+\
-               "http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN %s/reports/%s/http.%s.nmap %s" % (reconenumpath, ip, ip, ip)
-    print bcolors.HEADER + HTTPSCAN + bcolors.ENDC
-    http_results = subprocess.check_output(HTTPSCAN, shell=True)
-    print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with HTTP-SCAN for " + ip + bcolors.ENDC
-    print http_results
+    dirb(ip,port,"http", findWordlists(serviceBanner))
+    nikto(ip,port,"http")
+    curl(ip,port,"http")
+    httpScan(ip, port, False)
 
     return
 
@@ -169,54 +193,12 @@ def httpsEnum(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected https on " + ip + ":" + port + bcolors.ENDC
     print bcolors.HEADER + "INFO: Performing nmap web script scan for " + ip + ":" + port + bcolors.ENDC
 
-    if termMode:
-        dirb_process=multiprocessing.Process(target=openGnomeTerm, args=(ip + " dirb_https", dirb(ip, port, "https", findWordlists(serviceBanner)), True))
-        dirb_proccess.start()
+    dirb(ip,port,"https", findWordlists(serviceBanner))
+    nikto(ip,port,"https")
+    curl(ip,port,"https")
+    httpScan(ip, port, True)
+    sslScan(ip,port)
 
-        nikto_process=multiprocessing.Process(target=openGnomeTerm, args=(ip + " nikto_https", nikto(ip,port,"https"), True))
-        nikto_process.start()
-
-        curl_process=multiprocessing.Process(target=openGnomeTerm, args=(ip + " curl_https", curl(ip,port,"https"), True))
-        curl_process.start()
-
-    else:
-        '''
-        Use this as an abstraction to launch a process -> process.communicate -> catch errors
-        p = Popen(['bitcoin', 'sendtoaddress', ..], stdout=PIPE, stderr=PIPE)
-output, error = p.communicate()
-if p.returncode != 0: 
-   print("bitcoin failed %d %s %s" % (p.returncode, output, error))
-        '''
-        # dirbProc = Popen(stdout=PIPE, stderr=PIPE, shell=True)
-
-        results_dirb = subprocess.check_output(dirb(ip, port, "https", findWordlists(serviceBanner)), shell=True)
-        print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with dirb_https scan for " + ip + bcolors.ENDC
-        print results_dirb
-        write_to_file(ip, "dirb", results_dirb)
-
-        results_nikto = subprocess.check_output(nikto(ip,port,"https"), shell=True)
-        print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with NIKTO_https scan for " + ip + bcolors.ENDC
-        print results_nikto
-        write_to_file(ip, "nikto", results_nikto)
-
-        results_curl = subprocess.check_output(curl(ip,port,"https"), shell=True)
-        print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with CURL_https scan for " + ip + bcolors.ENDC
-        print results_curl
-        write_to_file(ip, "curl_https", results_curl)
-
-
-    SSLSCAN = "sslscan %s:%s >> %s/reports/%s/ssl_scan_%s" % (ip, port, reconenumpath, ip, ip)
-    print bcolors.HEADER + SSLSCAN + bcolors.ENDC
-    ssl_results = subprocess.check_output(SSLSCAN, shell=True)
-    print bcolors.OKGREEN + "INFO: CHECK FILE - Finished with SSLSCAN for " + ip + bcolors.ENDC
-
-    HTTPSCANS = "nmap -sV -Pn  -p %s --script=http-vhosts,http-userdir-enum,http-apache-negotiation,http-backup-finder,http-config-backup," % port+\
-                "http-default-accounts,http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,"+\
-                "http-git,http-iis-webdav-vuln,http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN %s/reports/%s/https.%s.nmap %s" % (reconenumpath, ip, ip, ip)
-    print bcolors.HEADER + HTTPSCANS + bcolors.ENDC
-    https_results = subprocess.check_output(HTTPSCANS, shell=True)
-    print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with HTTPS-scan for " + ip + bcolors.ENDC
-    print https_results
     return
 
 targettedWordlists = {
@@ -275,7 +257,7 @@ def smbNmap(ip, port, serviceBanner, termMode):
 
 def smbEnum(ip, port, serviceBanner, termMode):
     print "INFO: Detected SMB on " + ip + ":" + port
-    enum4linux = "enum4linux -a %s > %s/reports/%s/enum4linux_%s 2>/dev/null" % (ip, reconenumpath, ip, ip)
+    enum4linux = "enum4linux -a %s > %s/reports/%s/enum4linux.%s 2>/dev/null" % (ip, reconenumpath, ip, ip)
     enum4linux_results = subprocess.check_output(enum4linux, shell=True)
     print bcolors.OKGREEN + "INFO: CHECK FILE - Finished with ENUM4LINUX-Nmap-scan for " + ip + bcolors.ENDC
     print enum4linux_results
@@ -293,12 +275,12 @@ def ftpEnum(ip, port, serviceBanner, termMode):
 
 def udpScan(ip):
     print bcolors.HEADER + "INFO: Detected UDP on " + ip + bcolors.ENDC
-    UDPSCAN = "nmap -Pn -A -sC -sU -T 3 --top-ports 200 -oN '%s/reports/%s/udp_%s.nmap' %s" % (reconenumpath, ip, ip, ip)
+    UDPSCAN = "nmap -Pn -A -sC -sU -T 3 --top-ports 200 -oN '%s/reports/%s/udp.%s.nmap' %s" % (reconenumpath, ip, ip, ip)
     print bcolors.HEADER + UDPSCAN + bcolors.ENDC
     udpscan_results = subprocess.check_output(UDPSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with UDP-Nmap scan for " + ip + bcolors.ENDC
     print udpscan_results
-    UNICORNSCAN = "unicornscan -mU -I %s > %s/reports/%s/unicorn_udp_%s.txt" % ( ip, reconenumpath, ip, ip)
+    UNICORNSCAN = "unicornscan -mU -I %s > %s/reports/%s/unicorn_udp.%s.txt" % ( ip, reconenumpath, ip, ip)
     unicornscan_results = subprocess.check_output(UNICORNSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: CHECK FILE - Finished with UNICORNSCAN for " + ip + bcolors.ENDC
 
@@ -367,6 +349,7 @@ def nmapScan(ip, intenseMode):
     return serviceDict
 
 def openGnomeTerm(title, command, spawnTerm):
+    print "GNOME**********************************************************************************************************************************************"
     gnomeTermCmd = 'gnome-terminal '
     if (spawnTerm):
         #until xdotool problems are figured out for separate windows, going with tab approach
@@ -376,8 +359,10 @@ def openGnomeTerm(title, command, spawnTerm):
         gnomeTermCmd +=  '-t \"%s\" -x bash -c "bash --init-file <(echo \'%s\')"' % (title,command)
 
         print gnomeTermCmd
-        gnomeTermProc = subprocess.Popen(gnomeTermCmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        try:
+            gnomeTermProc = subprocess.Popen(gnomeTermCmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                          executable='/bin/bash').communicate()
+        except: pass
 
         #all of this logic below works via xdotool, can be re-purposed for tabs https://stackoverflow.com/questions/1188959/open-a-new-tab-in-gnome-terminal-using-command-line
         # #wait for thread
@@ -413,7 +398,7 @@ def openGnomeTerm(title, command, spawnTerm):
 
         gnomeTermCmd += '--tab '
     # gnomeTermCmd +=  '-t \"%s\" -x bash -c "%s; bash -i;"' % (title, command)
-    #print bcolors.OKBLUE + "{SHELL}\n" + gnomeTermCmd + "\n" + "{SHELL}" + bcolors.ENDC
+    print bcolors.OKBLUE + "{SHELL}\n" + gnomeTermCmd + "\n" + "{SHELL}" + bcolors.ENDC
     # gnomeTermProc = subprocess.Popen(gnomeTermCmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, executable='/bin/bash')
     return gnomeTermProc
 
@@ -483,7 +468,7 @@ def serviceEnumeration(ip, serviceDict, options):
 def bruteSprayCmd(ip):
     #brutespray -f %s/reports/%s/%s.nmap.xml -o %s/reports/%s/%s.brute -t 5 -T 2
     print bcolors.OKBLUE + "{BRUTE}"+ bcolors.ENDC
-    bruteCmd= "brutespray -f %s/reports/%s/%s.nmap.xml -o %s/reports/%s/%s.brute -t 5 -T 2" % (reconenumpath, ip, ip, reconenumpath, ip, ip)
+    bruteCmd= "brutespray -f %s/reports/%s/xml/%s.nmap.xml -o %s/reports/%s/%s.brute -t 5 -T 2" % (reconenumpath, ip, ip, reconenumpath, ip, ip)
     print bruteCmd
     print bcolors.OKBLUE + "{BRUTE}"+ bcolors.ENDC
     return bruteCmd
@@ -553,6 +538,7 @@ if __name__=='__main__':
     options = parser.parse_args()
 
     reconenumpath= subprocess.check_output(["/bin/bash", "-i", "-c", "echo $RECONENUMHOME"]).rstrip()
+    termMode = options.term
 
     reportDirectory = os.listdir("%s/reports/" % reconenumpath)
     for ip in options.targets:
