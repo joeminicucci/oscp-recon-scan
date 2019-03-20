@@ -13,15 +13,20 @@ import argparse
 import time
 
 # Todo:
-#Replace Curl with HTTP responses which check for body programmatically
-#Intense nmap discovery w/vulscan nse
-#wordlist auto discovery
-# Add mysql nmap-script
-#brute forcers / brutespray
+#catch errors in enumerations such as dirb (https)
+#searchsploit w/xml
+# enhanced unicorn scan
+#extra nmap scans
+# try gobuster instead of dirb, or consider both
+# new gnome tabs for cat'd results after auto closing scans
+# account for duplicate scans
+# Add mysql nmap-script, take it out of the mssql section
+#rename command methods
 # Change replace to sed:
-# sed 's|literal_pattern|replacement_string|g'
+    # sed 's|literal_pattern|replacement_string|g'
 
 start = time.time()
+reconenumpath=None
 
 class bcolors:
     HEADER = '\033[95m'
@@ -73,8 +78,8 @@ def connect_to_port(ip, port, service):
 
 def write_to_file(ip, enum_type, data):
 
-    file_path_linux = '../reports/%s/mapping-linux.md' % (ip)
-    file_path_windows = '../reports/%s/mapping-windows.md' % (ip)
+    file_path_linux = '%s/reports/%s/mapping-linux.md' % (reconenumpath, ip)
+    file_path_windows = '%s/reports/%s/mapping-windows.md' % (reconenumpath, ip)
     paths = [file_path_linux, file_path_windows]
     print bcolors.OKGREEN + "INFO: Writing " + enum_type + " to template files:\n " + file_path_linux + "   \n" + file_path_windows + bcolors.ENDC
 
@@ -99,14 +104,14 @@ def write_to_file(ip, enum_type, data):
 
 def dirb(ip, port, url_start, wordlist):
     print bcolors.OKBLUE + "{DIRB}"+ bcolors.ENDC
-    DIRBSCAN = "dirb %s://%s:%s %s -o \"../reports/%s/dirb.%s-%s.txt\" -r" % (url_start, ip, port, wordlist, ip, url_start, ip)
+    DIRBSCAN = "dirb %s://%s:%s %s -o \"%s/reports/%s/dirb.%s.%s.txt\" -r" % (url_start, ip, port, wordlist, reconenumpath, ip, url_start, ip)
     print bcolors.OKBLUE + DIRBSCAN + bcolors.ENDC
     print bcolors.OKBLUE + "{DIRB}"+ bcolors.ENDC
     return DIRBSCAN
 
 def nikto(ip, port, url_start):
     print bcolors.OKBLUE + "{NIKTO}"+ bcolors.ENDC
-    NIKTOSCAN = "nikto -h %s://%s:%s -o \"../reports/%s/nikto.%s-%s.txt\"" % (url_start, ip, port, ip, url_start, ip)
+    NIKTOSCAN = "nikto -h %s://%s:%s -o \"%s/reports/%s/nikto.%s.%s.txt\"" % (url_start, ip, port, reconenumpath, ip, url_start, ip)
     if url_start == 'https':
         NIKTOSCAN+=" -ssl"
     print bcolors.OKBLUE + NIKTOSCAN + bcolors.ENDC
@@ -115,7 +120,7 @@ def nikto(ip, port, url_start):
 
 def curl(ip, port, url_start):
     print bcolors.OKBLUE + "{CURL}"+ bcolors.ENDC
-    CURLSCAN = "curl -I -k %s://%s:%s -m 60 -o \"../reports/%s/curl.%s-%s.txt\"" % (url_start,ip,port,ip, url_start, ip)
+    CURLSCAN = "curl -I -k %s://%s:%s -m 60 -o \"%s/reports/%s/curl.%s.%s.txt\"" % (url_start,ip,port,reconenumpath, ip, url_start, ip)
     print bcolors.OKBLUE + CURLSCAN + bcolors.ENDC
     print bcolors.OKBLUE + "{CURL}"+ bcolors.ENDC
     return CURLSCAN
@@ -150,7 +155,9 @@ def httpEnum(ip, port, serviceBanner, termMode):
         print results_curl
         write_to_file(ip, "curl", results_curl)
 
-    HTTPSCAN = "nmap -sV -Pn -p %s --script=http-vhosts,http-userdir-enum,http-apache-negotiation,http-backup-finder,http-config-backup,http-default-accounts,http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,http-git,http-iis-webdav-vuln,http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN ../reports/%s/%s_http.nmap %s" % (port, ip, ip, ip)
+    HTTPSCAN = "nmap -sV -Pn -p %s --script=http-vhosts,http-userdir-enum,http-apache-negotiation,http-backup-finder,http-config-backup,http-default-accounts," % port+\
+               "http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,http-git,http-iis-webdav-vuln,"+\
+               "http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN %s/reports/%s/http.%s.nmap %s" % (reconenumpath, ip, ip, ip)
     print bcolors.HEADER + HTTPSCAN + bcolors.ENDC
     http_results = subprocess.check_output(HTTPSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with HTTP-SCAN for " + ip + bcolors.ENDC
@@ -163,8 +170,8 @@ def httpsEnum(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Performing nmap web script scan for " + ip + ":" + port + bcolors.ENDC
 
     if termMode:
-        dirbproc=multiprocessing.Process(target=openGnomeTerm, args=(ip + " dirb_https", dirb(ip, port, "https", findWordlists(serviceBanner)), True))
-        dirbproc.start()
+        dirb_process=multiprocessing.Process(target=openGnomeTerm, args=(ip + " dirb_https", dirb(ip, port, "https", findWordlists(serviceBanner)), True))
+        dirb_proccess.start()
 
         nikto_process=multiprocessing.Process(target=openGnomeTerm, args=(ip + " nikto_https", nikto(ip,port,"https"), True))
         nikto_process.start()
@@ -173,6 +180,15 @@ def httpsEnum(ip, port, serviceBanner, termMode):
         curl_process.start()
 
     else:
+        '''
+        Use this as an abstraction to launch a process -> process.communicate -> catch errors
+        p = Popen(['bitcoin', 'sendtoaddress', ..], stdout=PIPE, stderr=PIPE)
+output, error = p.communicate()
+if p.returncode != 0: 
+   print("bitcoin failed %d %s %s" % (p.returncode, output, error))
+        '''
+        # dirbProc = Popen(stdout=PIPE, stderr=PIPE, shell=True)
+
         results_dirb = subprocess.check_output(dirb(ip, port, "https", findWordlists(serviceBanner)), shell=True)
         print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with dirb_https scan for " + ip + bcolors.ENDC
         print results_dirb
@@ -189,12 +205,14 @@ def httpsEnum(ip, port, serviceBanner, termMode):
         write_to_file(ip, "curl_https", results_curl)
 
 
-    SSLSCAN = "sslscan %s:%s >> ../reports/%s/ssl_scan_%s" % (ip, port, ip, ip)
+    SSLSCAN = "sslscan %s:%s >> %s/reports/%s/ssl_scan_%s" % (ip, port, reconenumpath, ip, ip)
     print bcolors.HEADER + SSLSCAN + bcolors.ENDC
     ssl_results = subprocess.check_output(SSLSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: CHECK FILE - Finished with SSLSCAN for " + ip + bcolors.ENDC
 
-    HTTPSCANS = "nmap -sV -Pn  -p %s --script=http-vhosts,http-userdir-enum,http-apache-negotiation,http-backup-finder,http-config-backup,http-default-accounts,http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,http-git,http-iis-webdav-vuln,http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN ../reports/%s/%s_http.nmap %s" % (port, ip, ip, ip)
+    HTTPSCANS = "nmap -sV -Pn  -p %s --script=http-vhosts,http-userdir-enum,http-apache-negotiation,http-backup-finder,http-config-backup," % port+\
+                "http-default-accounts,http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,"+\
+                "http-git,http-iis-webdav-vuln,http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN %s/reports/%s/https.%s.nmap %s" % (reconenumpath, ip, ip, ip)
     print bcolors.HEADER + HTTPSCANS + bcolors.ENDC
     https_results = subprocess.check_output(HTTPSCANS, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with HTTPS-scan for " + ip + bcolors.ENDC
@@ -202,11 +220,11 @@ def httpsEnum(ip, port, serviceBanner, termMode):
     return
 
 targettedWordlists = {
-    "iis": "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/IIS.fuzz.txt",
+    "iis": "%s/SecLists/Discovery/Web-Content/IIS.fuzz.txt"% reconenumpath,
     "apache,tomcat,coyote":
-        "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/apache.txt,"\
-        "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/ApacheTomcat.fuzz.txt",
-    "php": "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/PHP.fuzz.txt"
+        "%s/SecLists/Discovery/Web-Content/apache.txt,"\
+        "%s/SecLists/Discovery/Web-Content/ApacheTomcat.fuzz.txt"% (reconenumpath,reconenumpath),
+    "php": "%s/SecLists/Discovery/Web-Content/PHP.fuzz.txt"% reconenumpath
 }
 
 bruteSupported = ['ssh','ftp','telnet','vnc','mssql','mysql','postgresql','rsh',
@@ -219,14 +237,15 @@ def findWordlists(serviceBanner):
     for wordlistType in targettedWordlists:
         if any(serv in serviceBanner.lower() for serv in wordlistType.split(",")):
             wordlists+=targettedWordlists[wordlistType]+","
-    wordlists+= "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/common.txt,"\
-                "/media/sf_scripts/recon/scripts/SecLists/Discovery/Web-Content/CGIs.txt"
+    wordlists+= "%s/SecLists/Discovery/Web-Content/common.txt," % reconenumpath +\
+                "%s/SecLists/Discovery/Web-Content/CGIs.txt"% reconenumpath
     return wordlists
 
 def mssqlEnum(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected MS-SQL on " + ip + ":" + port + bcolors.ENDC
     print bcolors.HEADER + "INFO: Performing nmap mssql script scan for " + ip + ":" + port + bcolors.ENDC
-    MSSQLSCAN = "nmap -sV -Pn -p %s --script=ms-sql-info,ms-sql-config,ms-sql-dump-hashes,mysql-empty-password,mysql-brute,mysql-users,mysql-variables,mysql-vuln-cve2012-2122 --script-args=mssql.instance-port=1433,mssql.username=sa,mssql.password=sa -oN ../reports/%s/mssql_%s.nmap %s" % (port, ip, ip)
+    MSSQLSCAN = "nmap -sV -Pn -p %s --script=ms-sql-info,ms-sql-config,ms-sql-dump-hashes,mysql-empty-password,mysql-brute,mysql-users,mysql-variables,mysql-vuln-cve2012-2122" %port+\
+                "--script-args=mssql.instance-port=1433,mssql.username=sa,mssql.password=sa -oN %s/reports/%s/mssql.%s.nmap %s" % (reconenumpath, ip, ip, ip)
     print bcolors.HEADER + MSSQLSCAN + bcolors.ENDC
     mssql_results = subprocess.check_output(MSSQLSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with MSSQL-scan for " + ip + bcolors.ENDC
@@ -237,7 +256,7 @@ def mssqlEnum(ip, port, serviceBanner, termMode):
 def smtpEnum(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected smtp on " + ip + ":" + port  + bcolors.ENDC
     connect_to_port(ip, port, "smtp")
-    SMTPSCAN = "nmap -sV -Pn -p %s --script=smtp-commands,smtp-enum-users,smtp-vuln-cve2010-4344,smtp-vuln-cve2011-1720,smtp-vuln-cve2011-1764 %s -oN ../reports/%s/smtp_%s.nmap" % (port, ip, ip, ip)
+    SMTPSCAN = "nmap -sV -Pn -p %s --script=smtp-commands,smtp-enum-users,smtp-vuln-cve2010-4344,smtp-vuln-cve2011-1720,smtp-vuln-cve2011-1764 %s -oN %s/reports/%s/smtp.%s.nmap %s" % (port, ip, reconenumpath, ip, ip, ip)
     print bcolors.HEADER + SMTPSCAN + bcolors.ENDC
     smtp_results = subprocess.check_output(SMTPSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with SMTP-scan for " + ip + bcolors.ENDC
@@ -247,7 +266,8 @@ def smtpEnum(ip, port, serviceBanner, termMode):
 
 def smbNmap(ip, port, serviceBanner, termMode):
     print "INFO: Detected SMB on " + ip + ":" + port
-    smbNmap = "nmap --script=smb-enum-shares,smb-ls,smb-enum-users,smb-mbenum,smb-os-discovery,smb-security-mode,smb-vuln-cve2009-3103,smb-vuln-ms06-025,smb-vuln-ms07-029,smb-vuln-ms08-067,smb-vuln-ms10-054,smb-vuln-ms10-061,smb-vuln-ms17-010,smb-vuln-regsvc-dos %s -oN ../reports/%s/smb_%s.nmap" % (ip, ip, ip)
+    smbNmap = "nmap --script=smb-enum-shares,smb-ls,smb-enum-users,smb-mbenum,smb-os-discovery,smb-security-mode,smb-vuln-cve2009-3103,smb-vuln-ms06-025,"+\
+              "smb-vuln-ms07-029,smb-vuln-ms08-067,smb-vuln-ms10-054,smb-vuln-ms10-061,smb-vuln-ms17-010,smb-vuln-regsvc-dos %s -oN %s/reports/%s/smb.%s.nmap %s" % (ip, reconenumpath, ip, ip, ip)
     smbNmap_results = subprocess.check_output(smbNmap, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with SMB-Nmap-scan for " + ip + bcolors.ENDC
     print smbNmap_results
@@ -255,7 +275,7 @@ def smbNmap(ip, port, serviceBanner, termMode):
 
 def smbEnum(ip, port, serviceBanner, termMode):
     print "INFO: Detected SMB on " + ip + ":" + port
-    enum4linux = "enum4linux -a %s > ../reports/%s/enum4linux_%s 2>/dev/null" % (ip, ip, ip)
+    enum4linux = "enum4linux -a %s > %s/reports/%s/enum4linux_%s 2>/dev/null" % (ip, reconenumpath, ip, ip)
     enum4linux_results = subprocess.check_output(enum4linux, shell=True)
     print bcolors.OKGREEN + "INFO: CHECK FILE - Finished with ENUM4LINUX-Nmap-scan for " + ip + bcolors.ENDC
     print enum4linux_results
@@ -264,7 +284,7 @@ def smbEnum(ip, port, serviceBanner, termMode):
 def ftpEnum(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected ftp on " + ip + ":" + port  + bcolors.ENDC
     connect_to_port(ip, port, "ftp")
-    FTPSCAN = "nmap -sV -Pn -p %s --script=ftp-anon,ftp-bounce,ftp-libopie,ftp-proftpd-backdoor,ftp-vsftpd-backdoor,ftp-vuln-cve2010-4221 -oN '../reports/%s/ftp_%s.nmap' %s" % (port, ip, ip, ip)
+    FTPSCAN = "nmap -sV -Pn -p %s --script=ftp-anon,ftp-bounce,ftp-libopie,ftp-proftpd-backdoor,ftp-vsftpd-backdoor,ftp-vuln-cve2010-4221 -oN '%s/reports/%s/ftp.%s.nmap' %s" % (port, reconenumpath, ip, ip, ip)
     print bcolors.HEADER + FTPSCAN + bcolors.ENDC
     results_ftp = subprocess.check_output(FTPSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with FTP-Nmap-scan for " + ip + bcolors.ENDC
@@ -273,19 +293,19 @@ def ftpEnum(ip, port, serviceBanner, termMode):
 
 def udpScan(ip):
     print bcolors.HEADER + "INFO: Detected UDP on " + ip + bcolors.ENDC
-    UDPSCAN = "nmap -Pn -A -sC -sU -T 3 --top-ports 200 -oN '../reports/%s/udp_%s.nmap' %s"  % (ip, ip, ip)
+    UDPSCAN = "nmap -Pn -A -sC -sU -T 3 --top-ports 200 -oN '%s/reports/%s/udp_%s.nmap' %s" % (reconenumpath, ip, ip, ip)
     print bcolors.HEADER + UDPSCAN + bcolors.ENDC
     udpscan_results = subprocess.check_output(UDPSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with UDP-Nmap scan for " + ip + bcolors.ENDC
     print udpscan_results
-    UNICORNSCAN = "unicornscan -mU -I %s > ../reports/%s/unicorn_udp_%s.txt" % (ip, ip, ip)
+    UNICORNSCAN = "unicornscan -mU -I %s > %s/reports/%s/unicorn_udp_%s.txt" % ( ip, reconenumpath, ip, ip)
     unicornscan_results = subprocess.check_output(UNICORNSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: CHECK FILE - Finished with UNICORNSCAN for " + ip + bcolors.ENDC
 
 def sshScan(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected SSH on " + ip + ":" + port  + bcolors.ENDC
     connect_to_port(ip, port, "ssh")
-    SSHSCAN = "nmap -sV -Pn -p %s --script=ssh-auth-methods,ssh-hostkey,ssh-run,sshv1 -oN '../reports/%s/ssh_%s.nmap' %s" % (port, ip, ip, ip)
+    SSHSCAN = "nmap -sV -Pn -p %s --script=ssh-auth-methods,ssh-hostkey,ssh-run,sshv1 -oN '%s/reports/%s/ssh.%s.nmap' %s" % (port, reconenumpath, ip, ip, ip)
     print bcolors.HEADER + SSHSCAN + bcolors.ENDC
     results_ssh = subprocess.check_output(SSHSCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with SSH-Nmap-scan for " + ip + bcolors.ENDC
@@ -295,7 +315,7 @@ def sshScan(ip, port, serviceBanner, termMode):
 def pop3Scan(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected POP3 on " + ip + ":" + port  + bcolors.ENDC
     connect_to_port(ip, port, "pop3")
-    POP3SCAN = "nmap -sV -Pn -p %s --script=pop3-brute,pop3-capabilities,pop3-ntlm-info -oN '../reports/%s/pop3_%s.nmap' %s" % (port, ip, ip, ip)
+    POP3SCAN = "nmap -sV -Pn -p %s --script=pop3-brute,pop3-capabilities,pop3-ntlm-info -oN '%s/reports/%s/pop3.%s.nmap' %s" % (port, reconenumpath, ip, ip, ip)
     print bcolors.HEADER + SSHSCAN + bcolors.ENDC
     results_pop3 = subprocess.check_output(POP3SCAN, shell=True)
     print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with POP3-Nmap-scan for " + ip + bcolors.ENDC
@@ -309,9 +329,9 @@ def nmapScan(ip, intenseMode):
 
     TCPSCAN = "nmap -sV -O "
     if intenseMode:
-        TCPSCAN += "-p- %s -oN '../reports/%s/%s.nmap.intense' -oX ../reports/%s/%s.nmap.intense.xml"  % (ip, ip, ip, ip, ip)
+        TCPSCAN += "-p- %s -oN '%s/reports/%s/%s.nmap.intense' -oX %s/reports/%s/xml/%s.nmap.intense.xml" % (ip, reconenumpath, ip, ip, reconenumpath, ip, ip)
     else :
-        TCPSCAN += "%s -oN '../reports/%s/%s.nmap' -oX ../reports/%s/%s.nmap.xml" % (ip, ip, ip, ip, ip)
+        TCPSCAN += "%s -oN '%s/reports/%s/%s.nmap' -oX %s/reports/%s/xml/%s.nmap.xml" % (ip, reconenumpath, ip, ip, reconenumpath, ip, ip)
 
     print bcolors.HEADER + TCPSCAN + bcolors.ENDC
 
@@ -331,7 +351,7 @@ def nmapScan(ip, intenseMode):
         if ("tcp" in line) and ("open" in line) and not ("Discovered" in line):
             # print line
             while "  " in line:
-                line = line.replace("  ", " ");
+                line = line.replace("  ", " ")
             linesplit= line.split(" ")
             service = linesplit[2] # grab the service name
 
@@ -362,7 +382,7 @@ def openGnomeTerm(title, command, spawnTerm):
         #all of this logic below works via xdotool, can be re-purposed for tabs https://stackoverflow.com/questions/1188959/open-a-new-tab-in-gnome-terminal-using-command-line
         # #wait for thread
         # # gnomeTermProc.communicate()
-        # # windowId = subprocess.check_output("cat /media/sf_scripts/recon/scripts/joe/oscp/reports/%s/windows" % ip, shell=True)
+        # # windowId = subprocess.check_output("cat %s/reports/%s/windows" % (reconenumpath, ip), shell=True)
         # XDOSEARCH = 'xdotool search --name \"%s\"' % title
         # print XDOSEARCH
         # # windowId = subprocess.check_output(XDOSEARCH, shell=True, executable='/bin/bash')
@@ -402,11 +422,14 @@ def openGnomeTab(title, command, windowId):
 
 def bruteForce(ip,term):
     try:
-
-
         if term:
             gnomeWindowId = openGnomeTerm(ip + " bRut3 foRc3", bruteSprayCmd(ip), True)
             time.sleep(5)
+        else:
+            #launching process without output since it is noisy!
+            results_bruteForce = subprocess.Popen(bruteSprayCmd(ip), shell=True).communicate()
+            print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with bruteSpray scan for " + ip + bcolors.ENDC
+            print results_dirb
     except:
         sys.stderr.write("Brute forcing failed, try to run it manually.")
 
@@ -458,9 +481,9 @@ def serviceEnumeration(ip, serviceDict, options):
     return
 
 def bruteSprayCmd(ip):
-    #brutespray -f ../reports/%s/%s.nmap.xml -o ../reports/%s/%s.brute -t 5 -T 2
+    #brutespray -f %s/reports/%s/%s.nmap.xml -o %s/reports/%s/%s.brute -t 5 -T 2
     print bcolors.OKBLUE + "{BRUTE}"+ bcolors.ENDC
-    bruteCmd= "brutespray -f ../reports/%s/%s.nmap.xml -o ../reports/%s/%s.brute -t 5 -T 2" % (ip, ip, ip, ip)
+    bruteCmd= "brutespray -f %s/reports/%s/%s.nmap.xml -o %s/reports/%s/%s.brute -t 5 -T 2" % (reconenumpath, ip, ip, reconenumpath, ip, ip)
     print bruteCmd
     print bcolors.OKBLUE + "{BRUTE}"+ bcolors.ENDC
     return bruteCmd
@@ -503,19 +526,16 @@ print bcolors.ENDC
 
 def buildReportDirectory(ip):
     print bcolors.HEADER + "INFO: No folder was found for " + ip + ". Setting up folder." + bcolors.ENDC
-    subprocess.check_output("mkdir ../reports/" + ip, shell=True)
-    subprocess.check_output("mkdir ../reports/" + ip + "/exploits", shell=True)
-    subprocess.check_output("mkdir ../reports/" + ip + "/privesc", shell=True)
-    subprocess.check_output("mkdir ../reports/" + ip + "/xml", shell=True)
-    print bcolors.OKGREEN + "INFO: Folder created here: " + "../reports/" + ip + bcolors.ENDC
-    subprocess.check_output("cp ../templates/windows-template.md ../reports/" + ip + "/mapping-windows.md", shell=True)
-    subprocess.check_output("cp ../templates/linux-template.md ../reports/" + ip + "/mapping-linux.md", shell=True)
-    print bcolors.OKGREEN + "INFO: Added pentesting templates: " + "../reports/" + ip + bcolors.ENDC
-    subprocess.check_output("sed -i -e 's/INSERTIPADDRESS/" + ip + "/g' ../reports/" + ip + "/mapping-windows.md",
-                            shell=True)
-    subprocess.check_output("sed -i -e 's/INSERTIPADDRESS/" + ip + "/g' ../reports/" + ip + "/mapping-linux.md",
-                            shell=True)
-
+    subprocess.check_output("mkdir %s/reports/" % reconenumpath + ip, shell=True)
+    subprocess.check_output("mkdir %s/reports/" % reconenumpath + ip + "/exploits", shell=True)
+    subprocess.check_output("mkdir %s/reports/" % reconenumpath + ip + "/privesc", shell=True)
+    subprocess.check_output("mkdir %s/reports/" % reconenumpath + ip + "/xml", shell=True)
+    print bcolors.OKGREEN + "INFO: Folder created here: " + "%s/reports/" % reconenumpath + ip + bcolors.ENDC
+    subprocess.check_output("cp %s/templates/windows-template.md %s/reports/" % (reconenumpath, reconenumpath) + ip + "/mapping-windows.md", shell=True)
+    subprocess.check_output("cp %s/templates/linux-template.md %s/reports/"  % (reconenumpath, reconenumpath) + ip + "/mapping-linux.md", shell=True)
+    print bcolors.OKGREEN + "INFO: Added pentesting templates: " + "%s/reports/" % reconenumpath + ip + bcolors.ENDC
+    subprocess.check_output("sed -i -e 's/INSERTIPADDRESS/" + ip + "/g' %s/reports/" %reconenumpath + ip + "/mapping-windows.md", shell=True)
+    subprocess.check_output("sed -i -e 's/INSERTIPADDRESS/" + ip + "/g' %s/reports/" % reconenumpath + ip + "/mapping-linux.md", shell=True)
 
 if __name__=='__main__':
 
@@ -532,12 +552,12 @@ if __name__=='__main__':
                         help='Attempt to leverage Gnome Terminal to spawn new windows and auto-type enumeration tools.', dest='term')
     options = parser.parse_args()
 
-    reportDirectory = os.listdir("../reports/")
+    reconenumpath= subprocess.check_output(["/bin/bash", "-i", "-c", "echo $RECONENUMHOME"]).rstrip()
+
+    reportDirectory = os.listdir("%s/reports/" % reconenumpath)
     for ip in options.targets:
         if not ip in reportDirectory:
             buildReportDirectory(ip)
 
-        #openGnomeTerm("test", 'echo hi', True)
         p = multiprocessing.Process(target=enumerateHost, args=(ip,options))
         p.start()
-
