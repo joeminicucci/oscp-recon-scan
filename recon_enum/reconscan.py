@@ -13,13 +13,11 @@ import argparse
 import time
 
 # Todo:
-#searchsploit w/xml
-# enhanced unicorn scan
-#extra nmap scans
+#FATAL: Failed to open file /usr/share/brutespray/wordlist/pop3/user - No such file or directory
 # try gobuster instead of dirb, or consider both
+
 # new gnome tabs for cat'd results after auto closing scans
 # account for duplicate scans
-# Add mysql nmap-script, take it out of the mssql section
 #rename command methods
 # Change replace to sed:
     # sed 's|literal_pattern|replacement_string|g'
@@ -89,7 +87,7 @@ def write_to_file(ip, enum_type, data):
     file_path_linux = '%s/reports/%s/mapping-linux.md' % (reconenumpath, ip)
     file_path_windows = '%s/reports/%s/mapping-windows.md' % (reconenumpath, ip)
     paths = [file_path_linux, file_path_windows]
-    print bcolors.OKGREEN + "INFO: Writing " + enum_type + " to template files:\n " + file_path_linux + "   \n" + file_path_windows + bcolors.ENDC
+    # print bcolors.OKGREEN + "INFO: Writing " + enum_type + " to template files:\n " + file_path_linux + "   \n" + file_path_windows + bcolors.ENDC
 
     for path in paths:
         if enum_type == "portscan":
@@ -119,27 +117,30 @@ def launchSubProcAndReport(name,level,command):
         cli_output = subprocess.check_output(command, shell=True)
         write_to_file(ip, name, cli_output)
     except:
+        #put a fail print here
         pass
 
     #report
     cli_results = "INFO: "
-    if level is "INFO" : cli_results+="RESULT BELOW "
+    if level is "INFO" :
+        cli_results+="RESULT BELOW "
     else: "CHECK FILE "
-    print bcolors.OKGREEN + cli_results + "- Finished with" + name + " SCAN for " + ip + bcolors.ENDC
-    print cli_output
+    print bcolors.OKGREEN + cli_results + "- Finished with " + name + " SCAN for " + ip + bcolors.ENDC
+    if level is "INFO":
+        print cli_output
     return
 
 
 def dirb(ip, port, url_start, wordlist):
     print bcolors.OKBLUE + "{DIRB}"+ bcolors.ENDC
-    DIRBSCAN = "dirb %s://%s:%s %s -o \"%s/reports/%s/dirb.%s.%s.txt\" -r" % (url_start, ip, port, wordlist, reconenumpath, ip, url_start, ip)
+    DIRBSCAN = "dirb %s://%s:%s %s -o \"%s/reports/%s/dirb.%s.%s.txt\" -r && dirb %s://%s:%s %s -o \"%s/reports/%s/dirb.%s.%s.recursive.txt\" " % (url_start, ip, port, wordlist, reconenumpath, ip, url_start, ip,url_start, ip, port, wordlist, reconenumpath, ip, url_start, ip)
     print bcolors.OKBLUE + DIRBSCAN + bcolors.ENDC
     print bcolors.OKBLUE + "{DIRB}"+ bcolors.ENDC
 
     if termMode:
         openGnomeTerm(ip + " _dirb_"+url_start, DIRBSCAN,True)
     else:
-        launchSubProcAndReport("dirb."+url_start, "FILE", DIRBSCAN, )
+        launchSubProcAndReport("dirb."+url_start, "FILE", DIRBSCAN)
     return
 
 def nikto(ip, port, url_start):
@@ -153,7 +154,7 @@ def nikto(ip, port, url_start):
     if termMode:
         openGnomeTerm(ip + " _nikto_" + url_start, NIKTOSCAN, True)
     else:
-        launchSubProcAndReport("nikto."+url_start, "FILE", DIRBSCAN, )
+        launchSubProcAndReport("nikto."+url_start, "FILE", NIKTOSCAN)
 
     return
 
@@ -172,7 +173,7 @@ def httpScan(ip, port, isSsl):
                "http-methods,http-method-tamper,http-passwd,http-robots.txt,http-devframework,http-enum,http-frontpage-login,http-git,http-iis-webdav-vuln,"+\
                "http-php-version,http-robots.txt,http-shellshock,http-vuln-cve2015-1635 -oN %s/reports/%s/http.%s.nmap %s" % (reconenumpath, ip, ip, ip)
 
-    return launchSubProcAndReport(prefix+" SCAN", "INFO", HTTPSCAN)
+    return launchSubProcAndReport(prefix, "INFO", HTTPSCAN)
 
 def sslScan(ip, port):
     SSLSCAN = "sslscan %s:%s >> %s/reports/%s/ssl_scan_%s" % (ip, port, reconenumpath, ip, ip)
@@ -225,15 +226,17 @@ def findWordlists(serviceBanner):
 
 def mssqlEnum(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected MS-SQL on " + ip + ":" + port + bcolors.ENDC
-    print bcolors.HEADER + "INFO: Performing nmap mssql script scan for " + ip + ":" + port + bcolors.ENDC
-    MSSQLSCAN = "nmap -sV -Pn -p %s --script=ms-sql-info,ms-sql-config,ms-sql-dump-hashes,mysql-empty-password,mysql-brute,mysql-users,mysql-variables,mysql-vuln-cve2012-2122" %port+\
-                "--script-args=mssql.instance-port=1433,mssql.username=sa,mssql.password=sa -oN %s/reports/%s/mssql.%s.nmap %s" % (reconenumpath, ip, ip, ip)
-    print bcolors.HEADER + MSSQLSCAN + bcolors.ENDC
-    mssql_results = subprocess.check_output(MSSQLSCAN, shell=True)
-    print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with MSSQL-scan for " + ip + bcolors.ENDC
-    print mssql_results
+    print bcolors.HEADER + "INFO: Performing nmap MSSQL script scan for " + ip + ":" + port + bcolors.ENDC
+    MSSQLSCAN = "nmap -sV -Pn -p %s --script=ms-sql-info,ms-sql-config,ms-sql-dump-hashes --script-args=mssql.instance-port=1433,mssql.username=sa,mssql.password=sa -oN %s/reports/%s/mssql.%s %s" % (port, reconenumpath, ip, ip, ip)
+    launchSubProcAndReport("MSSQL", "INFO", MSSQLSCAN)
     return
 
+def mysqlEnum(ip, port, serviceBanner, termMode):
+    print bcolors.HEADER + "INFO: Detected MYSQL on " + ip + ":" + port + bcolors.ENDC
+    print bcolors.HEADER + "INFO: Performing nmap MYSQL script scan for " + ip + ":" + port + bcolors.ENDC
+    MYSQLSCAN = "nmap -sV -Pn -p %s --script=mysql-empty-password,mysql-brute,mysql-users,mysql-variables,mysql-vuln-cve2012-2122 -oN %s/reports/%s/mysql.%s %s" % (port, reconenumpath, ip, ip, ip)
+    launchSubProcAndReport("MYSQL", "INFO", MYSQLSCAN)
+    return
 
 def smtpEnum(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected smtp on " + ip + ":" + port  + bcolors.ENDC
@@ -276,13 +279,12 @@ def ftpEnum(ip, port, serviceBanner, termMode):
 def udpScan(ip):
     print bcolors.HEADER + "INFO: Detected UDP on " + ip + bcolors.ENDC
     UDPSCAN = "nmap -Pn -A -sC -sU -T 3 --top-ports 200 -oN '%s/reports/%s/udp.%s.nmap' %s" % (reconenumpath, ip, ip, ip)
-    print bcolors.HEADER + UDPSCAN + bcolors.ENDC
-    udpscan_results = subprocess.check_output(UDPSCAN, shell=True)
-    print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with UDP-Nmap scan for " + ip + bcolors.ENDC
-    print udpscan_results
-    UNICORNSCAN = "unicornscan -mU -I %s > %s/reports/%s/unicorn_udp.%s.txt" % ( ip, reconenumpath, ip, ip)
-    unicornscan_results = subprocess.check_output(UNICORNSCAN, shell=True)
-    print bcolors.OKGREEN + "INFO: CHECK FILE - Finished with UNICORNSCAN for " + ip + bcolors.ENDC
+    launchSubProcAndReport("UDP", "INFO", UDPSCAN)
+
+    UNICORNSCAN = "unicornscan -mU -Iv %s > %s/reports/%s/unicorn_udp.%s.txt" % ( ip, reconenumpath, ip, ip)
+    # UNICORNSCAN+= " && unicornsc"
+    launchSubProcAndReport("UDP_UNICORN", "INFO", UNICORNSCAN)
+    return
 
 def sshScan(ip, port, serviceBanner, termMode):
     print bcolors.HEADER + "INFO: Detected SSH on " + ip + ":" + port  + bcolors.ENDC
@@ -305,15 +307,15 @@ def pop3Scan(ip, port, serviceBanner, termMode):
     return
 
 
-def nmapScan(ip, intenseMode):
+def nmapScan(ip):
     ip = ip.strip()
     print bcolors.OKGREEN + "INFO: Running general TCP/UDP nmap scans for " + ip + bcolors.ENDC
 
     TCPSCAN = "nmap -sV -O "
-    if intenseMode:
-        TCPSCAN += "-p- %s -oN '%s/reports/%s/%s.nmap.intense' -oX %s/reports/%s/xml/%s.nmap.intense.xml" % (ip, reconenumpath, ip, ip, reconenumpath, ip, ip)
-    else :
-        TCPSCAN += "%s -oN '%s/reports/%s/%s.nmap' -oX %s/reports/%s/xml/%s.nmap.xml" % (ip, reconenumpath, ip, ip, reconenumpath, ip, ip)
+    # if intenseMode:
+    #     TCPSCAN += "-p- %s -oN '%s/reports/%s/%s.nmap.intense' -oX %s/reports/%s/xml/%s.nmap.intense.xml" % (ip, reconenumpath, ip, ip, reconenumpath, ip, ip)
+    # else :
+    TCPSCAN += "%s -oN '%s/reports/%s/%s.nmap' -oX %s/reports/%s/xml/nmap.%s.xml" % (ip, reconenumpath, ip, ip, reconenumpath, ip, ip)
 
     print bcolors.HEADER + TCPSCAN + bcolors.ENDC
 
@@ -412,9 +414,7 @@ def bruteForce(ip,term):
             time.sleep(5)
         else:
             #launching process without output since it is noisy!
-            results_bruteForce = subprocess.Popen(bruteSprayCmd(ip), shell=True).communicate()
-            print bcolors.OKGREEN + "INFO: RESULT BELOW - Finished with bruteSpray scan for " + ip + bcolors.ENDC
-            print results_dirb
+            launchSubProcAndReport("Brute Spray", "FILE", bruteSprayCmd(ip))
     except:
         sys.stderr.write("Brute forcing failed, try to run it manually.")
 
@@ -468,15 +468,42 @@ def serviceEnumeration(ip, serviceDict, options):
 def bruteSprayCmd(ip):
     #brutespray -f %s/reports/%s/%s.nmap.xml -o %s/reports/%s/%s.brute -t 5 -T 2
     print bcolors.OKBLUE + "{BRUTE}"+ bcolors.ENDC
-    bruteCmd= "brutespray -f %s/reports/%s/xml/%s.nmap.xml -o %s/reports/%s/%s.brute -t 5 -T 2" % (reconenumpath, ip, ip, reconenumpath, ip, ip)
+    bruteCmd= "brutespray -f %s/reports/%s/xml/%s.nmap.xml -o %s/reports/%s/brute.%s -t 5 -T 2" % (reconenumpath, ip, ip, reconenumpath, ip, ip)
     print bruteCmd
     print bcolors.OKBLUE + "{BRUTE}"+ bcolors.ENDC
     return bruteCmd
 
+def searchSploit(ip):
+    SEARCHSPLOITCMD="searchsploit -w --nmap %s/reports/%s/xml/%s.nmap.xml > %s/reports/%s/searchsploit.nmap " % (reconenumpath, ip, ip, reconenumpath, ip)
+    launchSubProcAndReport("SEARCHSPLOIT PASS 1", "FILE", SEARCHSPLOITCMD)
+    return
+
+def intenseScans(ip):
+    #tcp connect
+    UNICORN_CONNECT="unicornscan -H -msf -Iv %s -p 1-65535 > %s/reports/%s/unicorn_connect.%s.txt" % (ip, reconenumpath, ip, ip)
+    launchSubProcAndReport("UNICORN_CONNECT","INFO", UNICORN_CONNECT)
+
+    #CONNECT, versioning, script scanner, os fingerprint
+    NMAPTCPCONNECT="nmap -sT -sV -A -O %s -oN '%s/reports/%s/nmap_connect.%s.txt' -oX %s/reports/%s/xml/nmap_connect.%s.xml" % (ip,reconenumpath,ip,ip,reconenumpath,ip,ip)
+    launchSubProcAndReport("NMAP_TCP_CONNECT","INFO", NMAPTCPCONNECT)
+
+    #nmap UDP
+    NMAP_UDP="nmap -sU --max-retries 2 --min-rate 5000 %s -oN '%s/reports/%s/nmap_udp.%s.txt' -oX %s/reports/%s/xml/nmap_udp.%s.xml" % (ip,reconenumpath,ip,ip,reconenumpath,ip,ip)
+    launchSubProcAndReport("NMAP_UDP","INFO", NMAP_UDP)
+
+    #nmap full port
+    NMAP_ABUSIVE= "nmap -sV -O -p- %s -oN '%s/reports/%s/nmap_intense.%s.txt' -oX %s/reports/%s/xml/nmap_intense.%s.xml" % (ip, reconenumpath, ip, ip, reconenumpath, ip, ip)
+    launchSubProcAndReport("NMAP_ABUSIVE","INFO", NMAP_ABUSIVE)
+
+
+
 def enumerateHost(ip, options):
-    serviceDict = nmapScan(ip, options.intense)
+    serviceDict = nmapScan(ip)
+    searchSploit(ip)
     if not options.nmapOnly:
         serviceEnumeration(ip, serviceDict, options)
+    if options.intense:
+        intenseScans(ip)
     return
 
 print bcolors.HEADER
