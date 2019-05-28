@@ -15,6 +15,7 @@ import time
 # Todo:
 #FATAL: Failed to open file /usr/share/brutespray/wordlist/pop3/user - No such file or directory
 # try gobuster instead of dirb, or consider both
+# https://gist.github.com/jhaddix/b80ea67d85c13206125806f0828f4d10
 
 # new gnome tabs for cat'd results after auto closing scans
 # account for duplicate scans
@@ -468,7 +469,7 @@ def serviceEnumeration(ip, serviceDict, options):
 def bruteSprayCmd(ip):
     #brutespray -f %s/reports/%s/%s.nmap.xml -o %s/reports/%s/%s.brute -t 5 -T 2
     print bcolors.OKBLUE + "{BRUTE}"+ bcolors.ENDC
-    bruteCmd= "brutespray -f %s/reports/%s/xml/%s.nmap.xml -o %s/reports/%s/brute.%s -t 5 -T 2" % (reconenumpath, ip, ip, reconenumpath, ip, ip)
+    bruteCmd= "brutespray -f %s/reports/%s/xml/nmap.%s.xml -o %s/reports/%s/brute.%s -t 5 -T 2" % (reconenumpath, ip, ip, reconenumpath, ip, ip)
     print bruteCmd
     print bcolors.OKBLUE + "{BRUTE}"+ bcolors.ENDC
     return bruteCmd
