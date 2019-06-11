@@ -475,7 +475,7 @@ def bruteSprayCmd(ip):
     return bruteCmd
 
 def searchSploit(ip):
-    SEARCHSPLOITCMD="searchsploit -w --nmap %s/reports/%s/xml/%s.nmap.xml > %s/reports/%s/searchsploit.nmap " % (reconenumpath, ip, ip, reconenumpath, ip)
+    SEARCHSPLOITCMD="searchsploit -w --nmap %s/reports/%s/xml/nmap.%s.xml > %s/reports/%s/searchsploit.nmap " % (reconenumpath, ip, ip, reconenumpath, ip)
     launchSubProcAndReport("SEARCHSPLOIT PASS 1", "FILE", SEARCHSPLOITCMD)
     return
 
