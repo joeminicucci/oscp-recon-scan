@@ -1,8 +1,8 @@
-# oscp
+# oscp-recon-scan
 
 ## Reconscan.py
 
-This script is based on the script by [Mike Czumak](http://www.securitysift.com/offsec-pwb-oscp/). But it is heavily rewritten, some things have been added, other stuff has been removed. The script is written as a preparation for the OSCP exam. It was never meant to be a general script. So if you want to use it you have to make sure to fix all the hardcoded paths. The script is multithreaded and can be run against several hosts at once.
+This script is based on the script by [Mike Czumak](http://www.securitysift.com/offsec-pwb-oscp/) and [xapax](https://github.com/xapax/oscp). But it is heavily rewritten, some things have been added, other stuff has been removed. The script is written as a preparation for the OSCP exam. It was never meant to be a general script. So if you want to use it you have to make sure to fix all the hardcoded paths. The script is multithreaded and can be run against several hosts at once.
 
 The script is invoked like this:
 
